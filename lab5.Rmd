@@ -1,0 +1,189 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+#Lab 4 - AD2
+
+# Set-up
+```{r echo=FALSE}
+library(ggplot2)
+library(caret)
+library(dplyr)
+library(ROSE)
+library(fastAdaboost)
+
+dados <- read.csv("data/train.csv", encoding="UTF-8")
+teste <- read.csv("data/test.csv", encoding="UTF-8")
+submission <- read.csv("data/sample_submission.csv")
+```
+
+```{r}
+formula = as.formula(situacao_final ~ UF + partido +	quantidade_doacoes +	quantidade_doadores +	total_receita	+	recursos_de_outros_candidatos.comites +	recursos_de_partidos + recursos_de_pessoas_físicas +	recursos_de_pessoas_juridicas +	recursos_proprios +	quantidade_despesas +	quantidade_fornecedores +	total_despesa +	sexo +	grau + estado_civil + descricao_ocupacao + descricao_cor_raca + despesa_max_campanha
+)
+```
+###1. Há desbalanceamento das classes (isto é, uma classe tem muito mais instâncias que outra)? Em que proporção? Quais efeitos colaterais o desbalanceamento de classes pode causar no classificador?
+```{r}
+total = nrow(dados)
+dist_classes <- dados %>% count(situacao_final)
+
+ggplot(dist_classes, aes(y = dist_classes$n/total * 100, x = dist_classes$situacao_final))+
+  geom_bar(stat="identity") +
+  labs(title = "Distribuição de classes", x = "Situação final", y = "Proporção (%)") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1), legend.position="none") +
+  theme(axis.text=element_text(size=8), axis.title=element_text(size=12,face="bold"))
+```
+
+Existem muito mais instâncias da classe "não eleito", tornando os dados enviesados. Isso pode fazer com que o classificador fique tendencioso para classificar novas instâncias como sendo dessa classe, fazendo com que ele classifique erroneamente.
+
+É possível balancear os dados usando o pacote ROSE.
+```{r}
+dados <- ROSE(situacao_final ~ UF + partido +	quantidade_doacoes +	quantidade_doadores +	total_receita	+	recursos_de_outros_candidatos.comites +	recursos_de_partidos + recursos_de_pessoas_físicas +	recursos_de_pessoas_juridicas +	recursos_proprios +	quantidade_despesas +	quantidade_fornecedores +	total_despesa +	sexo +	grau + estado_civil + descricao_ocupacao + descricao_cor_raca + despesa_max_campanha, data = dados, seed = 1)$data
+
+prop.table(table(dados$situacao_final))
+```
+
+
+###2. Treine: um modelo de regressão logística, uma árvore de decisão e um modelo de adaboost. Tune esses modelos usando validação cruzada e controle overfitting se necessário, considerando as particularidades de cada modelo.
+
+Antes de criar os modelos é necessário separar os dados em duas partições, uma para treino e outra para validação.
+```{r}
+dataPartition <- createDataPartition(y = dados$situacao_final, p=0.75, list=FALSE)
+
+treino <- dados[ dataPartition, ]
+validacao <- dados[ -dataPartition, ]
+
+fitControl <- trainControl(method = "cv",
+                    number = 100,
+                    search = "random")
+```
+
+# Regressão logística
+```{r error=FALSE}
+
+regLog <- train(formula,
+                 data = treino,
+                 method="glm",
+                 family="binomial",
+                 na.action = na.omit,
+                 trControl = fitControl)
+regLog
+```
+
+
+# Árvore de decisão
+
+```{r}
+arvore <- train(formula,
+                 data=treino,
+                 method = "rpart",
+                 cp=0.0005,
+                 maxdepth=30,
+                 trControl = fitControl)
+
+arvore
+```
+
+# Adaboost
+```{r}
+adaboost <- train(formula,
+                data=treino,
+                method = "adaboost",
+                trControl = fitControl)
+
+adaboost
+```
+
+###3. Reporte acurácia, precision, recall e f-measure no treino e validação. Como você avalia os resultados? Justifique sua resposta.
+
+```{r}
+validacao$predicaoArv <- predict(arvore, validacao)
+
+TP <- validacao %>% filter(situacao_final == "eleito", predicaoArv == "eleito") %>% nrow()
+TN <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoArv == "nao_eleito" ) %>% nrow()
+FP <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoArv == "eleito") %>% nrow() 
+FN <- validacao %>% filter(situacao_final == "eleito", predicaoArv == "nao_eleito" ) %>% nrow()
+
+accuracy <- (TP + TN)/(TP + TN + FP + FN) 
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+
+accuracy
+precision
+recall
+```
+
+Para o modelo de árvore de decisão temos uma acurácia de 0.9013, precisão de 0.9178 e recall de 0.8735.
+
+```{r}
+validacao$predicaoReg <- predict(regLog, validacao)
+
+TP <- validacao %>% filter(situacao_final == "eleito", predicaoReg == "eleito") %>% nrow()
+TN <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoReg == "nao_eleito" ) %>% nrow()
+FP <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoReg == "eleito") %>% nrow() 
+FN <- validacao %>% filter(situacao_final == "eleito", predicaoReg == "nao_eleito" ) %>% nrow()
+
+accuracy <- (TP + TN)/(TP + TN + FP + FN) 
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+
+accuracy
+precision
+recall
+```
+
+Para o modelo de regressão logística temos acurácia = 0.9177, precisão =  0.9089 e recall = 0.9217. Nesse contexto o mais importante é a precisão, pois o que mais interessa é saber se os cadidatos que o modelo afirma que são eleitos realmente são eleitos. Os resultados indicam que o modelo está muito bom.
+
+```{r}
+validacao$predicaoBoost <- predict(adaboost, validacao)
+
+TP <- validacao %>% filter(situacao_final == "eleito", predicaoBoost == "eleito") %>% nrow()
+TN <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoBoost == "nao_eleito" ) %>% nrow()
+FP <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoBoost == "eleito") %>% nrow() 
+FN <- validacao %>% filter(situacao_final == "eleito", predicaoBoost == "nao_eleito" ) %>% nrow()
+
+accuracy <- (TP + TN)/(TP + TN + FP + FN) 
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+
+accuracy
+precision
+recall
+```
+
+###4. Interprete as saídas dos modelos. Quais atributos parecem ser mais importantes de acordo com cada modelo? Crie pelo menos um novo atributo que não está nos dados originais e estude o impacto desse atributo
+
+```{r}
+varImp(arvore)
+
+```
+
+É possível notar que as variáveis total_despesa, recursos_de_partidos, recursos_de pessoas_juridicas, quantidade_despesas e total_receita possuem uma importancia muito alta seguidas da variável quantidade_doacoes que também possui importancia, porém todas as demais variáveis não apresentam muita importncia ao usar árvore de decisão.
+
+```{r}
+varImp(regLog)
+
+```
+
+```{r}
+varImp(adaboost)
+
+```
+
+
+Ao utilizar regressão logística a importância das variáveis muda bastante, a mais importante deixa de ser total_despesa e passa a ser descricao_ocupacaoDEPUTADO, e as variáveis que não possuiam importância no modelo de árvore de decisão passa a ter uma importância considerável nesse modelo.
+
+###5. Envie seus melhores modelos à competição do Kaggle.
+
+```{r echo=FALSE}
+submission_predict <- predict(arvore, teste)
+
+for(i in 1:length(submission_predict)){
+  print(submission_predict[i])
+  submission$prediction[i] = submission_predict[i]
+}
+
+write.csv(submission, file = "RenatoEly_submission.csv", row.names = FALSE)
+```
