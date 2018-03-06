@@ -7,8 +7,7 @@ output:
 
 #Lab 4 - AD2
 
-# Set-up
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 library(ggplot2)
 library(caret)
 library(dplyr)
@@ -61,7 +60,7 @@ fitControl <- trainControl(method = "cv",
 ```
 
 # Regressão logística
-```{r error=FALSE}
+```{r error=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 
 regLog <- train(formula,
                  data = treino,
@@ -87,13 +86,17 @@ arvore
 ```
 
 # Adaboost
-```{r}
-adaboost <- train(formula,
-                data=treino,
-                method = "adaboost",
-                trControl = fitControl)
+Obs: Não consegui rodar o modelo no meu computador
 
-adaboost
+```{r}
+
+#modeloAdb <- train(formula,
+#                 data=treino,
+#                 method = "adaboost",
+#                 trControl = fitControl)
+
+#modeloAdb
+
 ```
 
 ###3. Reporte acurácia, precision, recall e f-measure no treino e validação. Como você avalia os resultados? Justifique sua resposta.
@@ -115,7 +118,7 @@ precision
 recall
 ```
 
-Para o modelo de árvore de decisão temos uma acurácia de 0.9013, precisão de 0.9178 e recall de 0.8735.
+Para o modelo de árvore de decisão temos uma acurácia de 0.9535, precisão de 0.9429 e recall de 0.9618.
 
 ```{r}
 validacao$predicaoReg <- predict(regLog, validacao)
@@ -134,23 +137,24 @@ precision
 recall
 ```
 
-Para o modelo de regressão logística temos acurácia = 0.9177, precisão =  0.9089 e recall = 0.9217. Nesse contexto o mais importante é a precisão, pois o que mais interessa é saber se os cadidatos que o modelo afirma que são eleitos realmente são eleitos. Os resultados indicam que o modelo está muito bom.
+Para o modelo de regressão logística temos acurácia = 0.9177, precisão =  0.9089 e recall = 0.9217. Nesse contexto o mais importante é a precisão, pois o que mais interessa é saber se os cadidatos que o modelo afirma que são eleitos realmente são eleitos. Os resultados indicam um bom modelo, sendo o modelo de árvore de decisão melhor, pois todos os indicadores são maiores.
 
 ```{r}
-validacao$predicaoBoost <- predict(adaboost, validacao)
 
-TP <- validacao %>% filter(situacao_final == "eleito", predicaoBoost == "eleito") %>% nrow()
-TN <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoBoost == "nao_eleito" ) %>% nrow()
-FP <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoBoost == "eleito") %>% nrow() 
-FN <- validacao %>% filter(situacao_final == "eleito", predicaoBoost == "nao_eleito" ) %>% nrow()
+#validacao$predicaoBoost <- predict(modeloAdb, validacao)
 
-accuracy <- (TP + TN)/(TP + TN + FP + FN) 
-precision <- TP / (TP + FP)
-recall <- TP / (TP + FN)
+#TP <- validacao %>% filter(situacao_final == "eleito", predicaoBoost == "eleito") %>% nrow()
+#TN <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoBoost == "nao_eleito" ) %>% nrow()
+#FP <- validacao %>% filter(situacao_final == "nao_eleito" , predicaoBoost == "eleito") %>% nrow() 
+#FN <- validacao %>% filter(situacao_final == "eleito", predicaoBoost == "nao_eleito" ) %>% nrow()
 
-accuracy
-precision
-recall
+#accuracy <- (TP + TN)/(TP + TN + FP + FN) 
+#precision <- TP / (TP + FP)
+#recall <- TP / (TP + FN)
+
+#accuracy
+#precision
+#recall
 ```
 
 ###4. Interprete as saídas dos modelos. Quais atributos parecem ser mais importantes de acordo com cada modelo? Crie pelo menos um novo atributo que não está nos dados originais e estude o impacto desse atributo
@@ -160,24 +164,23 @@ varImp(arvore)
 
 ```
 
-É possível notar que as variáveis total_despesa, recursos_de_partidos, recursos_de pessoas_juridicas, quantidade_despesas e total_receita possuem uma importancia muito alta seguidas da variável quantidade_doacoes que também possui importancia, porém todas as demais variáveis não apresentam muita importncia ao usar árvore de decisão.
+É possível notar que as variáveis total_despesa, recursos_de_partidos, recursos_de pessoas_juridicas, quantidade_despesas e total_receita possuem uma importancia muito alta seguidas da variável quantidade_doacoes que também possui importância significante, recursos_de_outros_candidatos.comites, recursos_de_pessoas_físicas, quantidade_fornecedores e recursos_proprios possuem uma importância pequena comparada com as mais importantes e as demais variáveis não aparentam ser relevantes para esse modelo.
 
 ```{r}
 varImp(regLog)
 
 ```
 
+Ao utilizar regressão logística a importância das variáveis muda bastante, a mais importante deixa de ser total_despesa e passa a ser descricao_ocupacaoDEPUTADO, e as variáveis que não possuiam importância no modelo de árvore de decisão passam a ter uma importância considerável nesse modelo.
+
 ```{r}
-varImp(adaboost)
+#varImp(adaboost)
 
 ```
 
-
-Ao utilizar regressão logística a importância das variáveis muda bastante, a mais importante deixa de ser total_despesa e passa a ser descricao_ocupacaoDEPUTADO, e as variáveis que não possuiam importância no modelo de árvore de decisão passa a ter uma importância considerável nesse modelo.
-
 ###5. Envie seus melhores modelos à competição do Kaggle.
 
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 submission_predict <- predict(arvore, teste)
 
 for(i in 1:length(submission_predict)){
